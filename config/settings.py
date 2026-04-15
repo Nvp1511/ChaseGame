@@ -1,0 +1,12 @@
+import pygame
+
+TILE = 25
+ROWS = 26
+COLS = 33
+
+WIDTH = COLS * TILE
+HEIGHT = ROWS * TILE
+
+FPS = 60
+TIME_LIMIT = 20
+ENEMY_DELAY = 2
