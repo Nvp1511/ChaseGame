@@ -14,14 +14,30 @@ SECONDARY = (51, 183, 88)
 NEUTRAL = (97, 109, 130)
 SMALL_TEXT = (255, 248, 235)
 MENU_BG = (30, 29, 111)
+TEXT_SHADOW = (8, 12, 28)
 
 
 def get_font(size, bold=False):
-	for family in ("segoeui", "tahoma", "arial", "dejavusans"):
+	for family in ("tahoma", "segoeui", "arial", "dejavusans"):
 		font_path = pygame.font.match_font(family, bold=bold)
 		if font_path:
 			return pygame.font.Font(font_path, size)
 	return pygame.font.SysFont("arial", size, bold=bold)
+
+
+def draw_text(screen, text, font, color, pos, centered=False, shadow=True):
+	label = font.render(text, True, color)
+	if centered:
+		rect = label.get_rect(center=pos)
+	else:
+		rect = label.get_rect(topleft=pos)
+
+	if shadow:
+		shadow_label = font.render(text, True, TEXT_SHADOW)
+		screen.blit(shadow_label, rect.move(0, 1))
+
+	screen.blit(label, rect)
+	return rect
 
 
 def lighten(color, amount):
@@ -70,38 +86,37 @@ def draw_button(screen, rect, text, fill_color, font, text_color=(255, 255, 255)
 	pygame.draw.rect(screen, color, rect, border_radius=14)
 	pygame.draw.rect(screen, (16, 20, 34), rect, width=2, border_radius=14)
 
-	label = font.render(text, True, text_color)
-	label_rect = label.get_rect(center=rect.center)
-	screen.blit(label, label_rect)
+	draw_text(screen, text, font, text_color, rect.center, centered=True, shadow=True)
 
 
 def draw_footer_text(screen, text, position, font, color=SMALL_TEXT):
-	label = font.render(text, True, color)
-	screen.blit(label, position)
+	draw_text(screen, text, font, color, position, centered=False, shadow=True)
 
 
 def draw_settings_icon(screen, center, color=SMALL_TEXT, radius=8):
 	cx, cy = center
-	for angle in range(0, 360, 45):
-		rad = math.radians(angle)
-		outer_x = cx + int((radius + 5) * math.cos(rad))
-		outer_y = cy + int((radius + 5) * math.sin(rad))
-		inner_x = cx + int(radius * math.cos(rad))
-		inner_y = cy + int(radius * math.sin(rad))
-		pygame.draw.line(screen, color, (inner_x, inner_y), (outer_x, outer_y), 2)
+	teeth = 8
+	outer_r = radius + 5
+	inner_r = radius + 2
+	points = []
 
-	pygame.draw.circle(screen, color, (cx, cy), radius, 2)
-	pygame.draw.circle(screen, color, (cx, cy), max(2, radius // 3 + 1))
+	for i in range(teeth * 2):
+		angle = (math.pi * i) / teeth
+		r = outer_r if i % 2 == 0 else inner_r
+		points.append((cx + int(r * math.cos(angle)), cy + int(r * math.sin(angle))))
+
+	pygame.draw.polygon(screen, color, points)
+	pygame.draw.circle(screen, MENU_BG, (cx, cy), max(2, radius - 2))
+	pygame.draw.circle(screen, color, (cx, cy), max(2, radius - 2), 2)
 
 
 def run(screen, clock, _payload=None):
 	width, height = screen.get_size()
 	title_font = get_font(72 if width >= 1100 else 68 if width >= 950 else 64, bold=True)
-	button_font = get_font(21, bold=True)
-	footer_font = get_font(17, bold=True)
+	button_font = get_font(22, bold=True)
+	footer_font = get_font(18, bold=True)
 
-	title_surface = title_font.render("CHASE GAME", True, TITLE)
-	title_rect = title_surface.get_rect(center=(width // 2, int(height * 0.16)))
+	title_pos = (width // 2, int(height * 0.16))
 
 	button_width = min(340, max(280, int(width * 0.35)))
 	button_height = 58
@@ -136,14 +151,14 @@ def run(screen, clock, _payload=None):
 					return "settings", None
 
 		screen.fill(MENU_BG)
-		screen.blit(title_surface, title_rect)
+		draw_text(screen, "CHASE GAME", title_font, TITLE, title_pos, centered=True, shadow=True)
 
 		draw_button(screen, pvp_rect, "Chơi 2 Người (PvP)", PRIMARY, button_font, hover=pvp_rect.collidepoint(mouse_pos))
 		draw_button(screen, pve_rect, "Người vs AI (PvE)", SECONDARY, button_font, hover=pve_rect.collidepoint(mouse_pos))
 		draw_button(screen, quit_rect, "Thoát Game", NEUTRAL, button_font, hover=quit_rect.collidepoint(mouse_pos))
 
 		draw_footer_text(screen, "Hướng Dẫn", (8, height - 33), footer_font)
-		draw_settings_icon(screen, (width - 98, height - 22), SMALL_TEXT, radius=8)
+		draw_settings_icon(screen, (width - 98, height - 22), SMALL_TEXT, radius=7)
 		draw_footer_text(screen, "Cài Đặt", (width - 74, height - 33), footer_font)
 
 		pygame.display.flip()
