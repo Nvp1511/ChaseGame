@@ -3,40 +3,44 @@ import pygame
 from states.main_menu import draw_button, draw_panel, draw_torn_background, get_font
 
 
-def draw_center_card(screen_surface, border_color, title_text, title_color, body_text):
+def draw_center_card(screen_surface, result_type):
 	width, height = screen_surface.get_size()
 	draw_torn_background(screen_surface)
 
-	card_rect = pygame.Rect(width // 2 - 190, height // 2 - 210, 380, 420)
+	card_width = min(760, max(420, int(width * 0.46)))
+	card_height = min(620, max(500, int(height * 0.80)))
+	card_rect = pygame.Rect(width // 2 - card_width // 2, height // 2 - card_height // 2, card_width, card_height)
+
+	if result_type == "win":
+		border_color = (92, 232, 137)
+		title_text = "You Win!"
+		title_color = (83, 232, 143)
+	else:
+		border_color = (255, 109, 109)
+		title_text = "You Lose!"
+		title_color = (255, 125, 125)
+
 	draw_panel(screen_surface, card_rect, border_color=border_color)
 
-	title_font = get_font(46, bold=True)
-	body_font = get_font(22, bold=True)
+	title_font = get_font(80 if width >= 1100 else 68 if width >= 950 else 58, bold=True)
 
 	title_surface = title_font.render(title_text, True, title_color)
-	screen_surface.blit(title_surface, title_surface.get_rect(center=(width // 2, card_rect.top + 68)))
-
-	body_surface = body_font.render(body_text, True, (245, 247, 250))
-	screen_surface.blit(body_surface, body_surface.get_rect(center=(width // 2, card_rect.top + 125)))
+	screen_surface.blit(title_surface, title_surface.get_rect(center=(width // 2, card_rect.top + 102)))
 
 	return card_rect
 
 
 def run(screen_surface, game_clock, result_type=None):
 	width, _height = screen_surface.get_size()
-	button_font = get_font(22, bold=True)
+	button_font = get_font(28 if width >= 1100 else 24, bold=True)
 
 	result_type = result_type or "lose"
-	border_color = (92, 232, 137) if result_type == "win" else (255, 109, 109)
-	title_text = "You Win!" if result_type == "win" else "You Lose!"
-	title_color = (83, 232, 143) if result_type == "win" else (255, 125, 125)
+	card_rect = draw_center_card(screen_surface, result_type)
 
-	card_rect = draw_center_card(screen_surface, border_color, title_text, title_color, "Kết quả trận đấu đã được xác định")
-
-	button_width = 300
-	button_height = 56
-	start_y = card_rect.top + 140
-	button_gap = 18
+	button_width = min(560, max(380, card_rect.width - 120))
+	button_height = 82
+	start_y = card_rect.top + 190
+	button_gap = 30
 	center_x = width // 2
 
 	continue_rect = pygame.Rect(center_x - button_width // 2, start_y, button_width, button_height)
@@ -59,11 +63,11 @@ def run(screen_surface, game_clock, result_type=None):
 				if menu_rect.collidepoint(event.pos):
 					return "menu", None
 
-		draw_center_card(screen_surface, border_color, title_text, title_color, "Kết quả trận đấu đã được xác định")
+		draw_center_card(screen_surface, result_type)
 
-		draw_button(screen_surface, continue_rect, "Tiếp Tục", (30, 147, 184), button_font, hover=continue_rect.collidepoint(mouse_pos))
-		draw_button(screen_surface, restart_rect, "Chơi Lại (Restart)", (232, 134, 10), button_font, hover=restart_rect.collidepoint(mouse_pos))
-		draw_button(screen_surface, menu_rect, "Về Menu", (92, 104, 124), button_font, hover=menu_rect.collidepoint(mouse_pos))
+		draw_button(screen_surface, continue_rect, "Tiếp Tục", (30, 155, 186), button_font, hover=continue_rect.collidepoint(mouse_pos))
+		draw_button(screen_surface, restart_rect, "Chơi Lại (Restart)", (228, 131, 10), button_font, hover=restart_rect.collidepoint(mouse_pos))
+		draw_button(screen_surface, menu_rect, "Về Menu", (88, 101, 122), button_font, hover=menu_rect.collidepoint(mouse_pos))
 
 		pygame.display.flip()
 		game_clock.tick(60)
