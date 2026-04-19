@@ -4,6 +4,7 @@ import pygame
 
 from config.settings import FPS, HEIGHT, WIDTH
 from core.state_manager import StateManager
+from states.difficulty_state import run as run_difficulty
 from states.game_over_state import run as run_game_over
 from states.instruction_state import run as run_instruction
 from states.main_menu import run as run_main_menu
@@ -21,6 +22,7 @@ def run():
 
 	manager = StateManager("menu")
 	manager.register("menu", run_main_menu)
+	manager.register("difficulty", run_difficulty)
 	manager.register("instructions", run_instruction)
 	manager.register("settings", run_settings)
 	manager.register("game", run_play_pve)

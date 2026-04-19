@@ -1,5 +1,5 @@
 import pygame
-import math
+import os
 
 
 SCREEN_LEFT = (250, 237, 214)
@@ -15,6 +15,12 @@ NEUTRAL = (97, 109, 130)
 SMALL_TEXT = (255, 248, 235)
 MENU_BG = (30, 29, 111)
 TEXT_SHADOW = (8, 12, 28)
+FOOTER_HOVER_TEXT = (255, 255, 255)
+FOOTER_ICON_SIZE = 22
+FOOTER_ICON_GAP = 8
+
+_ICON_CACHE = {}
+_TINT_CACHE = {}
 
 
 def get_font(size, bold=False):
@@ -89,32 +95,97 @@ def draw_button(screen, rect, text, fill_color, font, text_color=(255, 255, 255)
 	draw_text(screen, text, font, text_color, rect.center, centered=True, shadow=True)
 
 
-def draw_footer_text(screen, text, position, font, color=SMALL_TEXT):
-	draw_text(screen, text, font, color, position, centered=False, shadow=True)
+def _safe_load_icon(path):
+	if path in _ICON_CACHE:
+		return _ICON_CACHE[path]
+
+	if not os.path.exists(path):
+		_ICON_CACHE[path] = None
+		return None
+
+	try:
+		loaded = pygame.image.load(path).convert_alpha()
+		_ICON_CACHE[path] = loaded
+		return loaded
+	except pygame.error:
+		_ICON_CACHE[path] = None
+		return None
 
 
-def draw_settings_icon(screen, center, color=SMALL_TEXT, radius=8):
-	cx, cy = center
-	teeth = 8
-	outer_r = radius + 5
-	inner_r = radius + 2
-	points = []
+def _load_first_available_icon(base_dir, filenames):
+	for filename in filenames:
+		icon = _safe_load_icon(os.path.join(base_dir, filename))
+		if icon is not None:
+			return icon
+	return None
 
-	for i in range(teeth * 2):
-		angle = (math.pi * i) / teeth
-		r = outer_r if i % 2 == 0 else inner_r
-		points.append((cx + int(r * math.cos(angle)), cy + int(r * math.sin(angle))))
 
-	pygame.draw.polygon(screen, color, points)
-	pygame.draw.circle(screen, MENU_BG, (cx, cy), max(2, radius - 2))
-	pygame.draw.circle(screen, color, (cx, cy), max(2, radius - 2), 2)
+def _tint_icon(source, tint_color, size=FOOTER_ICON_SIZE):
+	cache_key = (id(source), size, tint_color)
+	if cache_key in _TINT_CACHE:
+		return _TINT_CACHE[cache_key]
+
+	icon = pygame.transform.smoothscale(source, (size, size)).convert_alpha()
+	tinted = pygame.Surface((size, size), pygame.SRCALPHA)
+	r, g, b = tint_color
+
+	# Keep original alpha edges but force RGB to UI tint color.
+	for y in range(size):
+		for x in range(size):
+			alpha = icon.get_at((x, y)).a
+			if alpha:
+				# Normalize thin/dim source icons so both footer icons render with equal brightness.
+				normalized_alpha = max(170, min(255, int(alpha * 1.8)))
+				tinted.set_at((x, y), (r, g, b, normalized_alpha))
+
+	_TINT_CACHE[cache_key] = tinted
+	return tinted
+
+
+def draw_footer_link(screen, text, x, baseline_y, font, align_right=False, hover=False, icon_surface=None):
+	color = FOOTER_HOVER_TEXT if hover else SMALL_TEXT
+	text_surface = font.render(text, True, color)
+	text_height = text_surface.get_height()
+	text_y = baseline_y - text_height
+
+	icon_width = FOOTER_ICON_SIZE if icon_surface is not None else 0
+	gap = FOOTER_ICON_GAP if icon_surface is not None else 0
+	total_width = text_surface.get_width() + icon_width + gap
+
+	if align_right:
+		left_x = x - total_width
+	else:
+		left_x = x
+
+	text_x = left_x + icon_width + gap
+
+	if icon_surface is not None:
+		icon_y = text_y + (text_height - FOOTER_ICON_SIZE) // 2
+		screen.blit(_tint_icon(icon_surface, color), (left_x, icon_y))
+
+	draw_text(screen, text, font, color, (text_x, text_y), centered=False, shadow=True)
+
+	return pygame.Rect(left_x - 6, text_y - 4, total_width + 12, text_height + 8)
+
+
+def get_footer_link_rect(text, x, baseline_y, font, align_right=False, has_icon=False):
+	text_surface = font.render(text, True, SMALL_TEXT)
+	text_height = text_surface.get_height()
+	text_y = baseline_y - text_height
+
+	icon_width = FOOTER_ICON_SIZE if has_icon else 0
+	gap = FOOTER_ICON_GAP if has_icon else 0
+	total_width = text_surface.get_width() + icon_width + gap
+
+	left_x = x - total_width if align_right else x
+	return pygame.Rect(left_x - 6, text_y - 4, total_width + 12, text_height + 8)
 
 
 def run(screen, clock, _payload=None):
 	width, height = screen.get_size()
 	title_font = get_font(72 if width >= 1100 else 68 if width >= 950 else 64, bold=True)
 	button_font = get_font(22, bold=True)
-	footer_font = get_font(18, bold=True)
+	footer_font = get_font(19, bold=True)
 
 	title_pos = (width // 2, int(height * 0.16))
 
@@ -128,11 +199,18 @@ def run(screen, clock, _payload=None):
 	pve_rect = pygame.Rect(center_x - button_width // 2, start_y + button_height + button_gap, button_width, button_height)
 	quit_rect = pygame.Rect(center_x - button_width // 2, start_y + (button_height + button_gap) * 2, button_width, button_height)
 
-	guide_rect = pygame.Rect(8, height - 40, 165, 32)
-	settings_rect = pygame.Rect(width - 184, height - 40, 176, 32)
+	footer_y = height - 14
+	guide_x = 8
+	settings_x = width - 8
+
+	assets_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "assets", "images"))
+	help_icon = _load_first_available_icon(assets_dir, ["icon_help.png", "question.png", "help.png"])
+	settings_icon = _load_first_available_icon(assets_dir, ["icon_settings.png", "icon_setting.png", "settings.png"])
 
 	while True:
 		mouse_pos = pygame.mouse.get_pos()
+		guide_rect = get_footer_link_rect("Hướng Dẫn", guide_x, footer_y, footer_font, has_icon=help_icon is not None)
+		settings_rect = get_footer_link_rect("Cài Đặt", settings_x, footer_y, footer_font, align_right=True, has_icon=settings_icon is not None)
 
 		for event in pygame.event.get():
 			if event.type == pygame.QUIT:
@@ -142,12 +220,18 @@ def run(screen, clock, _payload=None):
 				if pvp_rect.collidepoint(event.pos):
 					return "pvp_placeholder", None
 				if pve_rect.collidepoint(event.pos):
-					return "game", None
+					return "difficulty", None
 				if quit_rect.collidepoint(event.pos):
 					return "quit", None
 				if guide_rect.collidepoint(event.pos):
 					return "instructions", None
 				if settings_rect.collidepoint(event.pos):
+					return "settings", None
+
+			if event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_h:
+					return "instructions", None
+				if event.key == pygame.K_s:
 					return "settings", None
 
 		screen.fill(MENU_BG)
@@ -157,9 +241,25 @@ def run(screen, clock, _payload=None):
 		draw_button(screen, pve_rect, "Người vs AI (PvE)", SECONDARY, button_font, hover=pve_rect.collidepoint(mouse_pos))
 		draw_button(screen, quit_rect, "Thoát Game", NEUTRAL, button_font, hover=quit_rect.collidepoint(mouse_pos))
 
-		draw_footer_text(screen, "Hướng Dẫn", (8, height - 33), footer_font)
-		draw_settings_icon(screen, (width - 98, height - 22), SMALL_TEXT, radius=7)
-		draw_footer_text(screen, "Cài Đặt", (width - 74, height - 33), footer_font)
+		guide_rect = draw_footer_link(
+			screen,
+			"Hướng Dẫn",
+			guide_x,
+			footer_y,
+			footer_font,
+			hover=guide_rect.collidepoint(mouse_pos),
+			icon_surface=help_icon,
+		)
+		settings_rect = draw_footer_link(
+			screen,
+			"Cài Đặt",
+			settings_x,
+			footer_y,
+			footer_font,
+			align_right=True,
+			hover=settings_rect.collidepoint(mouse_pos),
+			icon_surface=settings_icon,
+		)
 
 		pygame.display.flip()
 		clock.tick(60)

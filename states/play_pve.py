@@ -17,6 +17,12 @@ PLAYER_ANIM_MS = 90
 ENEMY_STEP_MS = 110
 ENEMY_ANIM_MS = 90
 
+DIFFICULTY_CONFIG = {
+	"easy": {"time_limit": 30, "enemy_step_ms": 150},
+	"medium": {"time_limit": TIME_LIMIT, "enemy_step_ms": ENEMY_STEP_MS},
+	"hard": {"time_limit": 14, "enemy_step_ms": 85},
+}
+
 KEY_TO_DIR = {
 	pygame.K_w: (-1, 0),
 	pygame.K_s: (1, 0),
@@ -49,6 +55,11 @@ def reset_game_objects():
 
 def run(screen_surface, game_clock, _payload=None):
 	player, enemy = reset_game_objects()
+	payload = _payload or {}
+	selected_difficulty = payload.get("difficulty", "medium")
+	config = DIFFICULTY_CONFIG.get(selected_difficulty, DIFFICULTY_CONFIG["medium"])
+	current_time_limit = config["time_limit"]
+	current_enemy_step_ms = config["enemy_step_ms"]
 
 	start_time = time.time()
 	last_player_step_ms = pygame.time.get_ticks()
@@ -100,7 +111,7 @@ def run(screen_surface, game_clock, _payload=None):
 
 			last_player_step_ms = now_ms
 
-		if now_ms - last_enemy_step_ms >= ENEMY_STEP_MS:
+		if now_ms - last_enemy_step_ms >= current_enemy_step_ms:
 			path = bfs(enemy.pos, player.pos)
 			enemy.update(path)
 			last_enemy_step_ms = now_ms
@@ -111,7 +122,7 @@ def run(screen_surface, game_clock, _payload=None):
 		if player.pos == enemy.pos:
 			return "result", "lose"
 
-		if time.time() - start_time >= TIME_LIMIT:
+		if time.time() - start_time >= current_time_limit:
 			return "result", "win"
 
 		screen_surface.fill((0, 0, 0))
