@@ -2,6 +2,7 @@ import sys
 
 import pygame
 
+from core.audio_manager import init_audio
 from config.settings import FPS, HEIGHT, WIDTH
 from core.state_manager import StateManager
 from states.difficulty_state import run as run_difficulty
@@ -15,6 +16,7 @@ from states.settings_state import run as run_settings
 
 def run():
 	pygame.init()
+	init_audio()
 
 	screen = pygame.display.set_mode((WIDTH, HEIGHT))
 	pygame.display.set_caption("Chase Game")

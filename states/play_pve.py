@@ -1,6 +1,8 @@
 import os
 import time
 import math
+import random
+from collections import deque
 
 import pygame
 
@@ -8,6 +10,7 @@ from ai.astar import astar
 from ai.bfs import bfs
 from ai.vision_ai import vision_move
 from config.settings import FPS, TILE, TIME_LIMIT
+from core.audio_manager import play_sound
 from entities.enemy import Enemy
 from entities.player import Player
 from map.game_map import draw_map as draw_game_map
@@ -45,6 +48,20 @@ DIFFICULTY_LABELS = {
 	"medium": "Trung binh",
 	"hard": "Kho",
 }
+
+OBJECTIVE_TARGETS = {
+	"easy": 3,
+	"medium": 3,
+	"hard": 4,
+}
+
+POWERUP_DURATION_MS = 4200
+POWERUP_RESPAWN_RANGE_MS = (2200, 5200)
+POWERUP_ON_MAP_CAP = 2
+OBJECTIVE_RELOCATE_MS = 7600
+POWERUP_LIFETIME_MS = 6500
+POWERUP_PLAYER_STEP_BONUS = 34
+DANGER_DISTANCE_THRESHOLD = 8
 
 KEY_TO_DIR = {
 	pygame.K_w: (-1, 0),
@@ -135,7 +152,156 @@ def _spawn_min_distance_by_difficulty(difficulty):
 	return 10
 
 
-def _chase_target_for_enemy(player_pos, enemy_index, difficulty, algorithm):
+def _all_open_cells():
+	open_cells = []
+	for row_index in range(1, len(map_data) - 1):
+		for col_index in range(1, len(map_data[0]) - 1):
+			if map_data[row_index][col_index] == " ":
+				open_cells.append([row_index, col_index])
+	return open_cells
+
+
+def _reachable_open_cells(start_pos):
+	if not is_walkable(map_data, start_pos):
+		return []
+
+	queue = deque([tuple(start_pos)])
+	visited = {tuple(start_pos)}
+	reachable = []
+
+	while queue:
+		row_index, col_index = queue.popleft()
+		reachable.append([row_index, col_index])
+
+		for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+			nr = row_index + dr
+			nc = col_index + dc
+			next_cell = (nr, nc)
+			if next_cell in visited:
+				continue
+			if not is_walkable(map_data, [nr, nc]):
+				continue
+			visited.add(next_cell)
+			queue.append(next_cell)
+
+	return reachable
+
+
+def _pick_collectible_cells(count, player_pos, enemy_positions, minimum_distance=7, min_spacing=6):
+	excluded = {tuple(player_pos), *{tuple(pos) for pos in enemy_positions}}
+	candidate_cells = []
+	for cell in _reachable_open_cells(player_pos):
+		cell_key = tuple(cell)
+		if cell_key in excluded:
+			continue
+		distance = abs(cell[0] - player_pos[0]) + abs(cell[1] - player_pos[1])
+		if distance >= minimum_distance:
+			candidate_cells.append(cell)
+
+	if len(candidate_cells) < count:
+		candidate_cells = [cell for cell in _reachable_open_cells(player_pos) if tuple(cell) not in excluded]
+
+	def manhattan(a, b):
+		return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+	random.shuffle(candidate_cells)
+	selected = []
+	for cell in candidate_cells:
+		if all(manhattan(cell, other) >= min_spacing for other in selected):
+			selected.append(cell)
+			if len(selected) >= count:
+				return selected
+
+	# If map is too constrained, gradually relax spacing.
+	for spacing in range(min_spacing - 1, -1, -1):
+		random.shuffle(candidate_cells)
+		selected = []
+		for cell in candidate_cells:
+			if all(manhattan(cell, other) >= spacing for other in selected):
+				selected.append(cell)
+				if len(selected) >= count:
+					return selected
+
+	return selected
+
+
+def _objective_min_spacing_by_difficulty(difficulty):
+	if difficulty == "easy":
+		return 7
+	if difficulty == "medium":
+		return 6
+	return 5
+
+
+def _spawn_powerup_cell(player_pos, enemy_positions, objective_cells, minimum_distance=6):
+	blocked = {tuple(player_pos), *{tuple(pos) for pos in enemy_positions}, *{tuple(cell) for cell in objective_cells}}
+	candidates = []
+	for cell in _reachable_open_cells(player_pos):
+		cell_key = tuple(cell)
+		if cell_key in blocked:
+			continue
+		distance = abs(cell[0] - player_pos[0]) + abs(cell[1] - player_pos[1])
+		if distance >= minimum_distance:
+			candidates.append(cell)
+
+	if not candidates:
+		candidates = [cell for cell in _reachable_open_cells(player_pos) if tuple(cell) not in blocked]
+	if not candidates:
+		return None
+
+	return random.choice(candidates)
+
+
+def _random_respawn_delay(respawn_range):
+	min_ms, max_ms = respawn_range
+	return random.randint(min_ms, max_ms)
+
+
+def _draw_objectives(screen_surface, objective_cells):
+	for row_index, col_index in objective_cells:
+		center = (col_index * TILE + TILE // 2, row_index * TILE + TILE // 2)
+		pygame.draw.circle(screen_surface, (255, 208, 76), center, max(4, TILE // 4))
+		pygame.draw.circle(screen_surface, (255, 245, 210), center, max(2, TILE // 8))
+
+
+def _draw_powerups(screen_surface, powerup_cells):
+	for row_index, col_index in powerup_cells:
+		rect = pygame.Rect(col_index * TILE + 5, row_index * TILE + 5, TILE - 10, TILE - 10)
+		pygame.draw.rect(screen_surface, (89, 232, 159), rect, border_radius=6)
+		pygame.draw.rect(screen_surface, (212, 255, 232), rect, width=2, border_radius=6)
+
+
+def _draw_danger_feedback(screen_surface, min_enemy_distance, warning_font):
+	if min_enemy_distance > DANGER_DISTANCE_THRESHOLD:
+		return
+
+	factor = (DANGER_DISTANCE_THRESHOLD - min_enemy_distance + 1) / (DANGER_DISTANCE_THRESHOLD + 1)
+	alpha = min(62, max(10, int(70 * factor)))
+	overlay = pygame.Surface(screen_surface.get_size(), pygame.SRCALPHA)
+	overlay.fill((170, 22, 22, alpha))
+	screen_surface.blit(overlay, (0, 0))
+
+	# Strong warning through animated border instead of darkening the whole map.
+	pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.012)
+	border_alpha = min(220, max(85, int(95 + 120 * factor * pulse)))
+	border_width = max(3, int(2 + 8 * factor))
+
+	border_layer = pygame.Surface(screen_surface.get_size(), pygame.SRCALPHA)
+	pygame.draw.rect(
+		border_layer,
+		(255, 82, 82, border_alpha),
+		border_layer.get_rect().inflate(-4, -4),
+		width=border_width,
+		border_radius=12,
+	)
+	screen_surface.blit(border_layer, (0, 0))
+
+	if min_enemy_distance <= 3:
+		warning = warning_font.render("DANGER", True, (255, 244, 244))
+		screen_surface.blit(warning, warning.get_rect(center=(screen_surface.get_width() // 2, 26)))
+
+
+def _chase_target_for_enemy(player_pos, enemy_index, difficulty, algorithm, player_move_dir=(0, 0), elapsed_ratio=0.0):
 	if difficulty == "easy":
 		offsets = [(0, 0), (-1, 0), (0, -1), (1, 0), (0, 1)]
 	elif difficulty == "hard":
@@ -143,9 +309,28 @@ def _chase_target_for_enemy(player_pos, enemy_index, difficulty, algorithm):
 	else:
 		offsets = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
 
+	# Give each AI family a distinct pursuit style.
+	if algorithm == "vision":
+		offsets = [
+			(0, 1),
+			(1, 0),
+			(-1, 0),
+			(0, -1),
+			(0, 0),
+		]
+	elif algorithm == "bfs":
+		predict_steps = 1 if difficulty != "hard" else 2
+		target = [player_pos[0] + player_move_dir[0] * predict_steps, player_pos[1] + player_move_dir[1] * predict_steps]
+		if is_walkable(map_data, target):
+			return target
+
 	# Keep A* focused while other AIs can flank to reduce identical movement.
 	if algorithm == "astar":
-		offsets = [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1)]
+		offsets = [(0, 0), (player_move_dir[0], player_move_dir[1]), (1, 0), (0, 1), (-1, 0), (0, -1)]
+
+	# Late-game pressure: bias enemies to direct chase more aggressively.
+	if elapsed_ratio >= 0.7 and (0, 0) in offsets:
+		offsets = [(0, 0)] + [item for item in offsets if item != (0, 0)]
 
 	chosen_offset = offsets[enemy_index % len(offsets)]
 	target = [player_pos[0] + chosen_offset[0], player_pos[1] + chosen_offset[1]]
@@ -178,8 +363,8 @@ def _algorithm_priority(algorithm):
 	return 2
 
 
-def _enemy_move_candidates(enemy, algorithm, player_pos, enemy_index, difficulty):
-	target = _chase_target_for_enemy(player_pos, enemy_index, difficulty, algorithm)
+def _enemy_move_candidates(enemy, algorithm, player_pos, enemy_index, difficulty, player_move_dir, elapsed_ratio):
+	target = _chase_target_for_enemy(player_pos, enemy_index, difficulty, algorithm, player_move_dir, elapsed_ratio)
 	path = _build_enemy_path(algorithm, enemy.pos, target, enemy.prev_pos)
 
 	if (not path or len(path) <= 1) and target != player_pos:
@@ -231,14 +416,27 @@ def _format_ai_team(algorithms):
 	return " | ".join(parts)
 
 
-def _draw_hud(screen_surface, elapsed_sec, time_limit, difficulty, algorithms, hud_font):
+def _draw_hud(
+	screen_surface,
+	elapsed_sec,
+	time_limit,
+	difficulty,
+	algorithms,
+	hud_font,
+	objective_collected,
+	objective_total,
+	boost_remaining_sec,
+):
 	remaining = max(0, math.ceil(time_limit - elapsed_sec))
 	difficulty_text = DIFFICULTY_LABELS.get(difficulty, difficulty.title())
 	ai_text = _format_ai_team(algorithms)
+	boost_text = f"Boost: {boost_remaining_sec:.1f}s" if boost_remaining_sec > 0 else "Boost: ready"
 
 	hud_lines = [
 		f"Time: {remaining}s",
 		f"Do kho: {difficulty_text}",
+		f"Muc tieu: {objective_collected}/{objective_total}",
+		boost_text,
 		f"AI Team: {ai_text}",
 	]
 
@@ -290,12 +488,39 @@ def run(screen_surface, game_clock, _payload=None):
 	current_time_limit = config["time_limit"]
 	current_enemy_step_ms = config["enemy_step_ms"]
 	hud_font = pygame.font.SysFont("consolas", 20, bold=True)
+	warning_font = pygame.font.SysFont("consolas", 28, bold=True)
 
 	start_time = time.time()
 	last_player_step_ms = pygame.time.get_ticks()
 	base_enemy_tick_ms = pygame.time.get_ticks()
 	enemy_next_step_ms = [base_enemy_tick_ms + index * 60 for index in range(len(enemies))]
 	enemy_anim_duration_ms = [max(80, int(current_enemy_step_ms * 0.85)) for _ in enemies]
+
+	objective_total = OBJECTIVE_TARGETS.get(selected_difficulty, 3)
+	objective_cells = _pick_collectible_cells(
+		objective_total,
+		player.pos,
+		[enemy.pos for enemy in enemies],
+		minimum_distance=8,
+		min_spacing=_objective_min_spacing_by_difficulty(selected_difficulty),
+	)
+	objective_total = len(objective_cells)
+	objective_cell_set = {tuple(cell) for cell in objective_cells}
+	objective_spawn_ms = {tuple(cell): base_enemy_tick_ms for cell in objective_cells}
+	collected_objectives = 0
+
+	powerup_cells = []
+	powerup_cell_set = set()
+	powerup_spawn_ms = {}
+	first_powerup = _spawn_powerup_cell(player.pos, [enemy.pos for enemy in enemies], objective_cells, minimum_distance=7)
+	if first_powerup is not None:
+		powerup_cells.append(first_powerup)
+		powerup_cell_set.add(tuple(first_powerup))
+		powerup_spawn_ms[tuple(first_powerup)] = base_enemy_tick_ms
+	powerup_active_until_ms = 0
+	next_powerup_spawn_ms = base_enemy_tick_ms + _random_respawn_delay(POWERUP_RESPAWN_RANGE_MS)
+	player_last_move_dir = (0, 0)
+	play_sound("start_up")
 
 	active_dirs = []
 	queued_turn = None
@@ -324,7 +549,11 @@ def run(screen_surface, game_clock, _payload=None):
 
 		now_ms = pygame.time.get_ticks()
 
-		if now_ms - last_player_step_ms >= PLAYER_STEP_MS:
+		player_step_ms = PLAYER_STEP_MS
+		if now_ms < powerup_active_until_ms:
+			player_step_ms = max(60, PLAYER_STEP_MS - POWERUP_PLAYER_STEP_BONUS)
+
+		if now_ms - last_player_step_ms >= player_step_ms:
 			moved = False
 			used_dir = None
 
@@ -340,15 +569,98 @@ def run(screen_surface, game_clock, _payload=None):
 
 			if moved and queued_turn == used_dir:
 				queued_turn = None
+			if moved and used_dir is not None:
+				player_last_move_dir = used_dir
 
 			last_player_step_ms = now_ms
 
+		player_cell = tuple(player.pos)
+		if player_cell in objective_cell_set:
+			objective_cells = [cell for cell in objective_cells if tuple(cell) != player_cell]
+			objective_cell_set.discard(player_cell)
+			objective_spawn_ms.pop(player_cell, None)
+			collected_objectives += 1
+			play_sound("eat")
+
+		# Relocate objectives that stay too long without being collected.
+		for objective_cell in list(objective_cells):
+			cell_key = tuple(objective_cell)
+			if now_ms - objective_spawn_ms.get(cell_key, now_ms) < OBJECTIVE_RELOCATE_MS:
+				continue
+
+			objective_cells.remove(objective_cell)
+			objective_cell_set.discard(cell_key)
+			objective_spawn_ms.pop(cell_key, None)
+			replacement = _spawn_powerup_cell(
+				player.pos,
+				[enemy.pos for enemy in enemies],
+				objective_cells + powerup_cells + [objective_cell],
+				minimum_distance=6,
+			)
+			if replacement is not None and tuple(replacement) not in objective_cell_set:
+				objective_cells.append(replacement)
+				objective_cell_set.add(tuple(replacement))
+				objective_spawn_ms[tuple(replacement)] = now_ms
+
+		for powerup_cell in list(powerup_cells):
+			if tuple(powerup_cell) == player_cell:
+				powerup_active_until_ms = max(powerup_active_until_ms, now_ms) + POWERUP_DURATION_MS
+				powerup_cells.remove(powerup_cell)
+				powerup_cell_set.discard(tuple(powerup_cell))
+				powerup_spawn_ms.pop(tuple(powerup_cell), None)
+				play_sound("eat")
+
+		# Relocate stale powerups that stayed too long without being collected.
+		for powerup_cell in list(powerup_cells):
+			cell_key = tuple(powerup_cell)
+			if now_ms - powerup_spawn_ms.get(cell_key, now_ms) < POWERUP_LIFETIME_MS:
+				continue
+
+			powerup_cells.remove(powerup_cell)
+			powerup_cell_set.discard(cell_key)
+			powerup_spawn_ms.pop(cell_key, None)
+			replacement = _spawn_powerup_cell(
+				player.pos,
+				[enemy.pos for enemy in enemies],
+				objective_cells + powerup_cells + [powerup_cell],
+				minimum_distance=5,
+			)
+			if replacement is not None and tuple(replacement) not in powerup_cell_set:
+				powerup_cells.append(replacement)
+				powerup_cell_set.add(tuple(replacement))
+				powerup_spawn_ms[tuple(replacement)] = now_ms
+
+		if len(powerup_cells) < POWERUP_ON_MAP_CAP and now_ms >= next_powerup_spawn_ms:
+			new_powerup = _spawn_powerup_cell(
+				player.pos,
+				[enemy.pos for enemy in enemies],
+				objective_cells + powerup_cells,
+				minimum_distance=5,
+			)
+			if new_powerup is not None and tuple(new_powerup) not in powerup_cell_set:
+				powerup_cells.append(new_powerup)
+				powerup_cell_set.add(tuple(new_powerup))
+				powerup_spawn_ms[tuple(new_powerup)] = now_ms
+			next_powerup_spawn_ms = now_ms + _random_respawn_delay(POWERUP_RESPAWN_RANGE_MS)
+
 		ready_indices = [index for index in range(len(enemies)) if now_ms >= enemy_next_step_ms[index]]
 		if ready_indices:
+			elapsed_ratio = min(1.0, (time.time() - start_time) / max(1.0, current_time_limit))
 			start_cells = {index: tuple(enemies[index].pos) for index in ready_indices}
 			all_occupied = {tuple(enemy.pos) for enemy in enemies}
 			interval_by_index = {
-				index: _enemy_step_interval_ms(current_enemy_step_ms, config["algorithms"][index], index, selected_difficulty)
+				index: max(
+					50,
+					int(
+						_enemy_step_interval_ms(
+							current_enemy_step_ms,
+							config["algorithms"][index],
+							index,
+							selected_difficulty,
+						)
+						* (1.0 - 0.14 * elapsed_ratio)
+					),
+				)
 				for index in ready_indices
 			}
 			candidate_by_index = {
@@ -358,6 +670,8 @@ def run(screen_surface, game_clock, _payload=None):
 					player.pos,
 					index,
 					selected_difficulty,
+					player_last_move_dir,
+					elapsed_ratio,
 				)
 				for index in ready_indices
 			}
@@ -434,18 +748,43 @@ def run(screen_surface, game_clock, _payload=None):
 		for enemy_index, enemy in enumerate(enemies):
 			enemy.update_animation(delta_ms, enemy_anim_duration_ms[enemy_index])
 
+		if collected_objectives >= objective_total:
+			play_sound("round_end")
+			return "result", {"result": "win", "difficulty": selected_difficulty}
+
 		if any(player.pos == enemy.pos for enemy in enemies):
+			play_sound("death")
 			return "result", {"result": "lose", "difficulty": selected_difficulty}
 
 		elapsed_sec = time.time() - start_time
 		if elapsed_sec >= current_time_limit:
+			play_sound("round_end")
 			return "result", {"result": "win", "difficulty": selected_difficulty}
 
 		screen_surface.fill((0, 0, 0))
 		draw_game_map(screen_surface, map_data, TILE)
-		_draw_hud(screen_surface, elapsed_sec, current_time_limit, selected_difficulty, config["algorithms"], hud_font)
+		_draw_objectives(screen_surface, objective_cells)
+		_draw_powerups(screen_surface, powerup_cells)
 		player.draw(screen_surface, TILE)
 		for enemy in enemies:
 			enemy.draw(screen_surface, TILE)
+
+		min_enemy_distance = min(
+			abs(enemy.pos[0] - player.pos[0]) + abs(enemy.pos[1] - player.pos[1]) for enemy in enemies
+		)
+		_draw_danger_feedback(screen_surface, min_enemy_distance, warning_font)
+
+		boost_remaining_sec = max(0.0, (powerup_active_until_ms - now_ms) / 1000.0)
+		_draw_hud(
+			screen_surface,
+			elapsed_sec,
+			current_time_limit,
+			selected_difficulty,
+			config["algorithms"],
+			hud_font,
+			collected_objectives,
+			objective_total,
+			boost_remaining_sec,
+		)
 
 		pygame.display.flip()

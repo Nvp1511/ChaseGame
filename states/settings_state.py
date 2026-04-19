@@ -1,5 +1,6 @@
 import pygame
 
+from core.audio_manager import get_master_volume, save_audio_settings, set_master_volume
 from states.main_menu import draw_torn_background, draw_panel, draw_button, PANEL, TITLE, ACCENT, NEUTRAL, get_font
 
 
@@ -12,7 +13,7 @@ def run(screen, clock, _payload=None):
 	panel_rect = pygame.Rect(90, 65, width - 180, height - 130)
 	back_rect = pygame.Rect(width // 2 - 90, height - 122, 180, 48)
 
-	volume = 0.8
+	volume = get_master_volume()
 	slider_rect = pygame.Rect(panel_rect.left + 120, panel_rect.top + 175, panel_rect.width - 240, 12)
 	knob_radius = 16
 
@@ -21,17 +22,22 @@ def run(screen, clock, _payload=None):
 
 		for event in pygame.event.get():
 			if event.type == pygame.QUIT:
+				save_audio_settings()
 				return "quit", None
 			if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+				save_audio_settings()
 				return "menu", None
 			if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
 				if back_rect.collidepoint(event.pos):
+					save_audio_settings()
 					return "menu", None
 				if slider_rect.inflate(0, 28).collidepoint(event.pos):
 					volume = max(0.0, min(1.0, (event.pos[0] - slider_rect.left) / slider_rect.width))
+					set_master_volume(volume, persist=False)
 			if event.type == pygame.MOUSEMOTION and event.buttons[0]:
 				if slider_rect.inflate(20, 28).collidepoint(event.pos):
 					volume = max(0.0, min(1.0, (event.pos[0] - slider_rect.left) / slider_rect.width))
+					set_master_volume(volume, persist=False)
 
 		draw_torn_background(screen)
 		draw_panel(screen, panel_rect, border_color=ACCENT, fill_color=PANEL)
