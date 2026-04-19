@@ -30,11 +30,17 @@ def draw_center_card(screen_surface, result_type):
 	return card_rect
 
 
-def run(screen_surface, game_clock, result_type=None):
+def run(screen_surface, game_clock, payload=None):
 	width, _height = screen_surface.get_size()
 	button_font = get_font(28 if width >= 1100 else 24, bold=True)
 
-	result_type = result_type or "lose"
+	if isinstance(payload, dict):
+		result_type = payload.get("result", "lose")
+		selected_difficulty = payload.get("difficulty", "medium")
+	else:
+		result_type = payload or "lose"
+		selected_difficulty = "medium"
+
 	card_rect = draw_center_card(screen_surface, result_type)
 
 	button_width = min(560, max(380, card_rect.width - 120))
@@ -57,9 +63,9 @@ def run(screen_surface, game_clock, result_type=None):
 				return "menu", None
 			if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
 				if continue_rect.collidepoint(event.pos):
-					return "game", None
+					return "game", {"difficulty": selected_difficulty}
 				if restart_rect.collidepoint(event.pos):
-					return "game", None
+					return "game", {"difficulty": selected_difficulty}
 				if menu_rect.collidepoint(event.pos):
 					return "menu", None
 

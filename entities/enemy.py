@@ -1,6 +1,6 @@
 class Enemy:
-    def __init__(self, image):
-        self.pos = [18, 18]
+    def __init__(self, image, start_pos=None):
+        self.pos = list(start_pos) if start_pos is not None else [18, 18]
         self.prev_pos = self.pos.copy()
         self.anim_progress = 1.0
         self.image = image
