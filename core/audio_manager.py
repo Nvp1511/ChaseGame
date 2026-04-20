@@ -1,5 +1,6 @@
 import json
 import os
+import random
 
 import pygame
 
@@ -13,6 +14,7 @@ DEFAULT_VOLUME = 0.8
 _SOUNDS = {}
 _VOLUME = DEFAULT_VOLUME
 _AUDIO_READY = False
+_MUSIC_VOLUME_SCALE = 0.35
 
 
 SOUND_FILES = {
@@ -21,6 +23,8 @@ SOUND_FILES = {
     "death": "death.wav",
     "round_end": "round_end.wav",
 }
+
+BACKGROUND_MUSIC_FILE = "music_game.wav"
 
 
 def _clamp_volume(volume):
@@ -85,6 +89,9 @@ def set_master_volume(volume, persist=True):
     for sound in _SOUNDS.values():
         sound.set_volume(_VOLUME)
 
+    if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+        pygame.mixer.music.set_volume(_clamp_volume(_VOLUME * _MUSIC_VOLUME_SCALE))
+
     if persist:
         try:
             save_audio_settings()
@@ -92,7 +99,7 @@ def set_master_volume(volume, persist=True):
             pass
 
 
-def play_sound(sound_key):
+def play_sound(sound_key, volume_scale=1.0, vary=False):
     if not _AUDIO_READY:
         return
 
@@ -101,6 +108,44 @@ def play_sound(sound_key):
         return
 
     try:
-        sound.play()
+        scale = _clamp_volume(volume_scale)
+        if vary:
+            scale = _clamp_volume(scale * random.uniform(0.92, 1.08))
+
+        channel = sound.play()
+        if channel is not None:
+            channel.set_volume(_clamp_volume(_VOLUME * scale))
+    except pygame.error:
+        return
+
+
+def play_background_music(loop=True, volume_scale=0.35):
+    global _MUSIC_VOLUME_SCALE
+
+    if not _AUDIO_READY:
+        return
+
+    music_path = os.path.join(SOUNDS_DIR, BACKGROUND_MUSIC_FILE)
+    if not os.path.exists(music_path):
+        return
+
+    try:
+        _MUSIC_VOLUME_SCALE = _clamp_volume(volume_scale)
+        pygame.mixer.music.load(music_path)
+        pygame.mixer.music.set_volume(_clamp_volume(_VOLUME * _MUSIC_VOLUME_SCALE))
+        pygame.mixer.music.play(-1 if loop else 0)
+    except pygame.error:
+        return
+
+
+def stop_background_music(fade_ms=250):
+    if not pygame.mixer.get_init():
+        return
+    try:
+        if pygame.mixer.music.get_busy():
+            if fade_ms > 0:
+                pygame.mixer.music.fadeout(fade_ms)
+            else:
+                pygame.mixer.music.stop()
     except pygame.error:
         return
