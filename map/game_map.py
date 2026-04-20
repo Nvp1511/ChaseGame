@@ -2,6 +2,10 @@ import pygame
 
 
 MAP_THEME = {
+	"pvp": {
+		"wall": (46, 72, 168),
+		"floor_overlay": (6, 14, 34, 52),
+	},
 	"easy": {
 		"wall": (72, 154, 116),
 		"floor_overlay": (8, 34, 24, 38),
