@@ -72,7 +72,7 @@ def run(screen_surface, game_clock, payload=None):
 		draw_center_card(screen_surface, result_type)
 
 		draw_button(screen_surface, continue_rect, "Tiếp Tục", (30, 155, 186), button_font, hover=continue_rect.collidepoint(mouse_pos))
-		draw_button(screen_surface, restart_rect, "Chơi Lại (Restart)", (228, 131, 10), button_font, hover=restart_rect.collidepoint(mouse_pos))
+		draw_button(screen_surface, restart_rect, "Chơi Lại", (228, 131, 10), button_font, hover=restart_rect.collidepoint(mouse_pos))
 		draw_button(screen_surface, menu_rect, "Về Menu", (88, 101, 122), button_font, hover=menu_rect.collidepoint(mouse_pos))
 
 		pygame.display.flip()

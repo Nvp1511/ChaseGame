@@ -1,0 +1,58 @@
+import os
+
+import pygame
+
+from config.settings import TIME_LIMIT
+
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+PLAYER_STEP_MS = 110
+PLAYER_ANIM_MS = 90
+ENEMY_STEP_MS = 110
+ENEMY_ANIM_MS = 90
+
+DIFFICULTY_CONFIG = {
+	"easy": {
+		"time_limit": 35,
+		"enemy_step_ms": ENEMY_STEP_MS + 35,
+		"algorithms": ("vision", "vision", "vision"),
+	},
+	"medium": {
+		"time_limit": TIME_LIMIT + 4,
+		"enemy_step_ms": ENEMY_STEP_MS + 5,
+		"algorithms": ("vision", "vision", "bfs"),
+	},
+	"hard": {
+		"time_limit": max(12, TIME_LIMIT - 4),
+		"enemy_step_ms": ENEMY_STEP_MS - 5,
+		"algorithms": ("vision", "bfs", "astar"),
+	},
+}
+
+DIFFICULTY_LABELS = {
+	"easy": "Dễ",
+	"medium": "Trung bình",
+	"hard": "Khó",
+}
+
+OBJECTIVE_TARGETS = {
+	"easy": 3,
+	"medium": 3,
+	"hard": 4,
+}
+
+POWERUP_DURATION_MS = 4200
+POWERUP_RESPAWN_RANGE_MS = (2200, 5200)
+POWERUP_ON_MAP_CAP = 2
+OBJECTIVE_RELOCATE_MS = 7600
+POWERUP_LIFETIME_MS = 6500
+POWERUP_PLAYER_STEP_BONUS = 34
+DANGER_DISTANCE_THRESHOLD = 8
+
+KEY_TO_DIR = {
+	pygame.K_w: (-1, 0),
+	pygame.K_s: (1, 0),
+	pygame.K_a: (0, -1),
+	pygame.K_d: (0, 1),
+}

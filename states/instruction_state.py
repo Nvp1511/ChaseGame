@@ -93,11 +93,12 @@ def run(screen, clock, _payload=None):
 	right_box = pygame.Rect(outer.centerx + 14, outer.top + 120, outer.width // 2 - 46, outer.height - 160)
 
 	rules = [
-		"Người chơi cần chạy trốn khỏi AI",
-		"AI sử dụng các thuật toán để truy đuổi",
-		"Thời gian chơi: 60 giây",
-		"Nếu AI bắt được người chơi thì AI thắng",
-		"Nếu sống đến hết thời gian thì Người chơi thắng",
+		"Bạn điều khiển 1 nhân vật bằng WASD để né đội AI truy đuổi",
+		"Ăn chấm vàng để tăng Mục tiêu",
+		"Ăn đủ Mục tiêu sẽ thắng ngay (Dễ 3, Trung bình 3, Khó 4)",
+		"Ăn ô xanh để tăng tốc 4.2 giây (có thể cộng dồn)",
+		"Nếu AI chạm vào người chơi thì thua",
+		"Nếu sống đến hết thời gian thì thắng",
 	]
 
 	while True:
@@ -128,13 +129,18 @@ def run(screen, clock, _payload=None):
 		key_size = min(72, max(56, (content_width - key_gap * 3) // 4))
 		key_font = get_font(max(30, int(key_size * 0.6)), bold=True)
 
-		p1 = body_font.render("Player 1: Di chuyển", True, TEXT)
+		p1 = body_font.render("Người chơi (PvE): Di chuyển", True, TEXT)
 		screen.blit(p1, (content_x, left_box.top + 95))
 		draw_key_row(screen, ["W", "A", "S", "D"], content_x, left_box.top + 145, key_size, key_size, key_gap, key_font)
 
-		p2 = body_font.render("Player 2: Di chuyển", True, TEXT)
-		screen.blit(p2, (content_x, left_box.top + 255))
-		draw_key_row(screen, ["↑", "←", "↓", "→"], content_x, left_box.top + 305, key_size, key_size, key_gap, key_font)
+		esc_hint = body_font.render("ESC: Tạm dừng / mở menu pause", True, TEXT)
+		screen.blit(esc_hint, (content_x, left_box.top + 255))
+
+		obj_hint = body_font.render("Chấm vàng: +1 Mục tiêu", True, TEXT)
+		screen.blit(obj_hint, (content_x, left_box.top + 305))
+
+		boost_hint = body_font.render("Ô xanh: Buff tăng tốc 4.2s", True, TEXT)
+		screen.blit(boost_hint, (content_x, left_box.top + 350))
 
 		draw_rules(
 			screen,

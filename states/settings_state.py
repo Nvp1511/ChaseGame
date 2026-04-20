@@ -5,6 +5,10 @@ from states.main_menu import draw_torn_background, draw_panel, draw_button, PANE
 
 
 def run(screen, clock, _payload=None):
+	payload = _payload or {}
+	return_state = payload.get("return_state", "menu")
+	return_payload = payload.get("return_payload")
+
 	width, height = screen.get_size()
 	title_font = get_font(40, bold=True)
 	body_font = get_font(24, bold=True)
@@ -26,11 +30,11 @@ def run(screen, clock, _payload=None):
 				return "quit", None
 			if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
 				save_audio_settings()
-				return "menu", None
+				return return_state, return_payload
 			if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
 				if back_rect.collidepoint(event.pos):
 					save_audio_settings()
-					return "menu", None
+					return return_state, return_payload
 				if slider_rect.inflate(0, 28).collidepoint(event.pos):
 					volume = max(0.0, min(1.0, (event.pos[0] - slider_rect.left) / slider_rect.width))
 					set_master_volume(volume, persist=False)
