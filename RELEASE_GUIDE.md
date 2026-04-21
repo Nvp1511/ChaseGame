@@ -50,14 +50,3 @@ Nếu Windows hiện cảnh báo SmartScreen:
 1. Nên chạy game ở chế độ pin tối đa (nếu dùng laptop) để khung hình ổn định hơn.
 2. Nếu không nghe thấy âm thanh, vào `Cài Đặt` trong game để kiểm tra thanh volume.
 3. Nếu game không mở được, thử tải lại bản build mới nhất từ `Actions`.
-
-## Dành cho nhóm phát triển
-
-Workflow build hiện tại:
-
-1. Tự động chạy khi push lên `main` hoặc khi tạo tag `v*`.
-2. Tạo các tệp:
-   - `ChaseGame.exe`
-   - `ChaseGame-<version>-windows.zip`
-   - `SHA256SUMS.txt`
-3. Nếu push tag `v*`, workflow sẽ tạo GitHub Release kèm các tệp trên.
