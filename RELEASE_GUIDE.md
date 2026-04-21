@@ -4,12 +4,14 @@ Tài liệu này dành cho người dùng cuối: tải game ở đâu, mở gam
 
 ## Tải game ở đâu?
 
-Hiện tại dự án đang build tự động bằng GitHub Actions
+Hiện tại dự án đang build tự động bằng GitHub Actions.
+
+**⚠️ Lưu ý: Luôn tải file `.zip`, không tải `.exe` riêng lẻ.**
 
 Bạn có 2 cách tải bản Windows:
 
-1. **Cách 1 (khuyên dùng)**: Vào tab `Actions` trên GitHub, mở workflow `Build Windows Exe`, vào lần chạy mới nhất thành công, tải artifact `ChaseGame-windows-...`.
-2. **Cách 2 (khi có gắn tag phát hành)**: Vào tab `Releases`, tải file zip bản mới nhất.
+1. **Cách 1 (khuyên dùng)**: Vào tab `Releases`, tải file `.zip` bản mới nhất (ví dụ: `ChaseGame-v0.2.0-windows.zip`).
+2. **Cách 2 (bản dev gần đây nhất)**: Vào tab `Actions`, mở workflow `Build Windows Exe`, vào lần chạy mới nhất thành công, tải artifact file `.zip` (chứ không phải `.exe` riêng lẻ).
 
 ## Cách cài và mở game
 
