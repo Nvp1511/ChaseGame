@@ -1,11 +1,8 @@
-import os
-
 import pygame
 
 from config.settings import TILE
 from entities.player import Player
-
-from .constants import BASE_DIR
+from utils.runtime_paths import resource_path
 
 
 def load_scaled_image(path, size):
@@ -14,10 +11,10 @@ def load_scaled_image(path, size):
 
 
 def reset_game_objects():
-	player_img = load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "blue.png"), (TILE, TILE))
+	player_img = load_scaled_image(resource_path("assets", "images", "blue.png"), (TILE, TILE))
 	enemy_images = [
-		load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "ghost_20.png"), (TILE, TILE)),
-		load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "pink_enemy.png"), (TILE, TILE)),
-		load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "red_enemy.png"), (TILE, TILE)),
+		load_scaled_image(resource_path("assets", "images", "ghost_20.png"), (TILE, TILE)),
+		load_scaled_image(resource_path("assets", "images", "pink_enemy.png"), (TILE, TILE)),
+		load_scaled_image(resource_path("assets", "images", "red_enemy.png"), (TILE, TILE)),
 	]
 	return Player(player_img), enemy_images

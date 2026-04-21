@@ -1,6 +1,7 @@
 import os
 import random
 import time
+from collections import deque
 
 import pygame
 
@@ -10,6 +11,7 @@ from entities.player import Player
 from map.game_map import draw_map as draw_game_map, is_walkable
 from map.map_data import map_data, set_map_for_difficulty
 from states.main_menu import draw_button, get_font
+from utils.runtime_paths import resource_path
 
 
 PVP_TIME_LIMIT_SEC = 60
@@ -45,8 +47,7 @@ def _load_scaled_image(path, size):
 
 
 def _build_player_images():
-	base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-	player1_img = _load_scaled_image(os.path.join(base_dir, "assets", "images", "blue.png"), (TILE, TILE)).convert_alpha()
+	player1_img = _load_scaled_image(resource_path("assets", "images", "blue.png"), (TILE, TILE)).convert_alpha()
 	player2_img = player1_img.copy()
 	# Tint second player so both are easy to distinguish.
 	player2_img.fill((255, 170, 130, 255), special_flags=pygame.BLEND_RGBA_MULT)
@@ -91,15 +92,59 @@ def _random_respawn_delay(respawn_range):
 	return random.randint(respawn_range[0], respawn_range[1])
 
 
-def _spawn_speed_powerup(excluded_cells):
+def _reachable_walkable_cells(start_cells):
+	queue = deque()
+	visited = set()
+	reachable = set()
+
+	for row_index, col_index in start_cells:
+		cell = (row_index, col_index)
+		if cell in visited:
+			continue
+		if not is_walkable(map_data, [row_index, col_index]):
+			continue
+		visited.add(cell)
+		queue.append(cell)
+
+	while queue:
+		row_index, col_index = queue.popleft()
+		reachable.add((row_index, col_index))
+		for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+			nr = row_index + dr
+			nc = col_index + dc
+			next_cell = (nr, nc)
+			if next_cell in visited:
+				continue
+			if not is_walkable(map_data, [nr, nc]):
+				continue
+			visited.add(next_cell)
+			queue.append(next_cell)
+
+	return reachable
+
+
+def _is_safe_powerup_cell(row_index, col_index):
+	if row_index <= 0 or col_index <= 0:
+		return False
+	if row_index >= len(map_data) - 1 or col_index >= len(map_data[0]) - 1:
+		return False
+
+	walkable_neighbors = 0
+	for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+		if is_walkable(map_data, [row_index + dr, col_index + dc]):
+			walkable_neighbors += 1
+
+	return walkable_neighbors >= 2
+
+
+def _spawn_speed_powerup(excluded_cells, reachable_cells):
 	candidates = []
-	for row_index, row in enumerate(map_data):
-		for col_index, cell in enumerate(row):
-			if not is_walkable(map_data, [row_index, col_index]):
-				continue
-			if (row_index, col_index) in excluded_cells:
-				continue
-			candidates.append([row_index, col_index])
+	for row_index, col_index in reachable_cells:
+		if (row_index, col_index) in excluded_cells:
+			continue
+		if not _is_safe_powerup_cell(row_index, col_index):
+			continue
+		candidates.append([row_index, col_index])
 
 	if not candidates:
 		return None
@@ -216,6 +261,7 @@ def run(screen_surface, game_clock, _payload=None):
 		player2.pos = _find_spawn_cell(1, len(map_data[0]) - 2, 1, -1)
 	player1.prev_pos = player1.pos.copy()
 	player2.prev_pos = player2.pos.copy()
+	reachable_spawn_cells = _reachable_walkable_cells((tuple(player1.pos), tuple(player2.pos)))
 
 	hud_font = get_font(16, bold=True)
 	title_font = get_font(52, bold=True)
@@ -361,7 +407,7 @@ def run(screen_surface, game_clock, _payload=None):
 
 			if len(powerup_cells) < PVP_POWERUP_ON_MAP_CAP and now_ms >= next_powerup_spawn_ms:
 				excluded_cells = {tuple(player1.pos), tuple(player2.pos), *powerup_cell_set}
-				new_powerup = _spawn_speed_powerup(excluded_cells)
+				new_powerup = _spawn_speed_powerup(excluded_cells, reachable_spawn_cells)
 				if new_powerup is not None:
 					cell_key = tuple(new_powerup)
 					if cell_key not in powerup_cell_set:

@@ -1,11 +1,6 @@
-import os
-
 import pygame
 
 from config.settings import TIME_LIMIT
-
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PLAYER_STEP_MS = 110
 PLAYER_ANIM_MS = 90
