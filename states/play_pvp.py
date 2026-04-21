@@ -16,7 +16,7 @@ from states.play_pve.render import draw_pause_overlay, pause_ui_layout
 from utils.runtime_paths import resource_path
 
 
-PVP_TIME_LIMIT_SEC = 60
+PVP_TIME_LIMIT_SEC = 35
 PVP_TAGGER_STEP_MS = 102
 PVP_RUNNER_STEP_MS = 118
 PVP_ANIM_MS = 90
