@@ -4,7 +4,7 @@ import time
 import pygame
 
 from config.settings import FPS, TILE
-from core.audio_manager import play_sound
+from core.audio_manager import play_loop_sound, play_sound, stop_loop_sound
 from map.game_map import draw_map as draw_game_map
 from map.map_data import map_data, set_map_for_difficulty
 from states import settings_state
@@ -49,14 +49,14 @@ def run(screen_surface, game_clock, _payload=None):
 	config = DIFFICULTY_CONFIG.get(selected_difficulty, DIFFICULTY_CONFIG["medium"])
 	set_map_for_difficulty(selected_difficulty)
 
-	player, enemy_img = reset_game_objects()
+	player, enemy_images = reset_game_objects()
 	blocked = {tuple(player.pos)}
 	for dr in (-1, 0, 1):
 		for dc in (-1, 0, 1):
 			blocked.add((player.pos[0] + dr, player.pos[1] + dc))
 	spawn_min_distance = spawn_min_distance_by_difficulty(selected_difficulty)
 	enemies = spawn_enemies(
-		enemy_img,
+		enemy_images,
 		len(config["algorithms"]),
 		blocked,
 		player_anchor=player.pos,
@@ -114,6 +114,7 @@ def run(screen_surface, game_clock, _payload=None):
 
 		for event in pygame.event.get():
 			if event.type == pygame.QUIT:
+				stop_loop_sound("danger", fade_ms=0)
 				return "quit", None
 
 			if is_paused:
@@ -139,6 +140,7 @@ def run(screen_surface, game_clock, _payload=None):
 							return "quit", None
 						continue
 					if menu_rect.collidepoint(event.pos):
+						stop_loop_sound("danger", fade_ms=0)
 						return "menu", None
 
 			if event.type == pygame.KEYDOWN:
@@ -156,6 +158,7 @@ def run(screen_surface, game_clock, _payload=None):
 					continue
 				if is_paused:
 					if event.key == pygame.K_m:
+						stop_loop_sound("danger", fade_ms=0)
 						return "menu", None
 					if event.key == pygame.K_s:
 						next_state, _payload = settings_state.run(
@@ -212,8 +215,10 @@ def run(screen_surface, game_clock, _payload=None):
 			danger_level += (target_danger_level - danger_level) * smoothing
 			if (not danger_alert) and min_enemy_distance <= 3:
 				danger_alert = True
+				play_loop_sound("danger", volume_scale=0.68)
 			elif danger_alert and danger_level < 0.36:
 				danger_alert = False
+				stop_loop_sound("danger", fade_ms=120)
 			draw_danger_feedback(screen_surface, danger_level, warning_font, min_enemy_distance <= 3)
 			boost_remaining_sec = max(0.0, (powerup_active_until_ms - now_ms) / 1000.0)
 			draw_pause_overlay(screen_surface, mouse_pos)
@@ -420,15 +425,18 @@ def run(screen_surface, game_clock, _payload=None):
 			enemy.update_animation(delta_ms, enemy_anim_duration_ms[enemy_index])
 
 		if collected_objectives >= objective_total:
+			stop_loop_sound("danger", fade_ms=0)
 			play_sound("round_end")
 			return "result", {"result": "win", "difficulty": selected_difficulty}
 
 		if any(player.pos == enemy.pos for enemy in enemies):
+			stop_loop_sound("danger", fade_ms=0)
 			play_sound("death")
 			return "result", {"result": "lose", "difficulty": selected_difficulty}
 
 		elapsed_sec = time.time() - start_time - paused_total_sec
 		if elapsed_sec >= current_time_limit:
+			stop_loop_sound("danger", fade_ms=0)
 			play_sound("round_end")
 			return "result", {"result": "win", "difficulty": selected_difficulty}
 
@@ -451,8 +459,10 @@ def run(screen_surface, game_clock, _payload=None):
 		danger_level += (target_danger_level - danger_level) * smoothing
 		if (not danger_alert) and min_enemy_distance <= 3:
 			danger_alert = True
+			play_loop_sound("danger", volume_scale=0.68)
 		elif danger_alert and danger_level < 0.36:
 			danger_alert = False
+			stop_loop_sound("danger", fade_ms=120)
 		draw_danger_feedback(screen_surface, danger_level, warning_font, min_enemy_distance <= 3)
 
 		boost_remaining_sec = max(0.0, (powerup_active_until_ms - now_ms) / 1000.0)

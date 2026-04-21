@@ -15,6 +15,7 @@ _SOUNDS = {}
 _VOLUME = DEFAULT_VOLUME
 _AUDIO_READY = False
 _MUSIC_VOLUME_SCALE = 0.35
+_LOOPING_CHANNELS = {}
 
 
 SOUND_FILES = {
@@ -22,6 +23,7 @@ SOUND_FILES = {
     "eat": "eat.wav",
     "death": "death.wav",
     "round_end": "round_end.wav",
+    "danger": "danger.mp3",
 }
 
 BACKGROUND_MUSIC_FILE = "music_game.wav"
@@ -88,6 +90,11 @@ def set_master_volume(volume, persist=True):
     _VOLUME = _clamp_volume(volume)
     for sound in _SOUNDS.values():
         sound.set_volume(_VOLUME)
+    for _sound_key, (_channel, _scale) in list(_LOOPING_CHANNELS.items()):
+        if _channel is None or (not _channel.get_busy()):
+            _LOOPING_CHANNELS.pop(_sound_key, None)
+            continue
+        _channel.set_volume(_clamp_volume(_VOLUME * _scale))
 
     if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
         pygame.mixer.music.set_volume(_clamp_volume(_VOLUME * _MUSIC_VOLUME_SCALE))
@@ -115,6 +122,51 @@ def play_sound(sound_key, volume_scale=1.0, vary=False):
         channel = sound.play()
         if channel is not None:
             channel.set_volume(_clamp_volume(_VOLUME * scale))
+    except pygame.error:
+        return
+
+
+def play_loop_sound(sound_key, volume_scale=1.0):
+    if not _AUDIO_READY:
+        return
+
+    sound = _SOUNDS.get(sound_key)
+    if sound is None:
+        return
+
+    existing = _LOOPING_CHANNELS.get(sound_key)
+    if existing is not None:
+        channel, scale = existing
+        if channel is not None and channel.get_busy():
+            channel.set_volume(_clamp_volume(_VOLUME * scale))
+            return
+        _LOOPING_CHANNELS.pop(sound_key, None)
+
+    try:
+        scale = _clamp_volume(volume_scale)
+        channel = sound.play(loops=-1)
+        if channel is None:
+            return
+        channel.set_volume(_clamp_volume(_VOLUME * scale))
+        _LOOPING_CHANNELS[sound_key] = (channel, scale)
+    except pygame.error:
+        return
+
+
+def stop_loop_sound(sound_key, fade_ms=120):
+    existing = _LOOPING_CHANNELS.pop(sound_key, None)
+    if existing is None:
+        return
+
+    channel, _scale = existing
+    if channel is None:
+        return
+
+    try:
+        if fade_ms > 0:
+            channel.fadeout(fade_ms)
+        else:
+            channel.stop()
     except pygame.error:
         return
 

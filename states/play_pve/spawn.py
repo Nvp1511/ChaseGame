@@ -6,9 +6,11 @@ from map.game_map import is_walkable
 from map.map_data import map_data
 
 
-def spawn_enemies(enemy_img, count, blocked_cells=None, player_anchor=None, min_player_distance=0):
+def spawn_enemies(enemy_images, count, blocked_cells=None, player_anchor=None, min_player_distance=0):
 	blocked_cells = blocked_cells or set()
 	player_anchor = player_anchor or [1, 1]
+	if not enemy_images:
+		raise ValueError("enemy_images must contain at least one image")
 
 	def manhattan(a, b):
 		return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -36,7 +38,7 @@ def spawn_enemies(enemy_img, count, blocked_cells=None, player_anchor=None, min_
 
 	if not open_cells:
 		fallback = [len(map_data) - 2, len(map_data[0]) - 2]
-		return [Enemy(enemy_img, fallback.copy()) for _ in range(count)]
+		return [Enemy(enemy_images[index % len(enemy_images)], fallback.copy()) for index in range(count)]
 
 	spawn_points = []
 	available = list(open_cells)
@@ -56,7 +58,7 @@ def spawn_enemies(enemy_img, count, blocked_cells=None, player_anchor=None, min_
 		if not available:
 			available = list(open_cells)
 
-	return [Enemy(enemy_img, pos) for pos in spawn_points]
+	return [Enemy(enemy_images[index % len(enemy_images)], pos) for index, pos in enumerate(spawn_points)]
 
 
 def spawn_min_distance_by_difficulty(difficulty):

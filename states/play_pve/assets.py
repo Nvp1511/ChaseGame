@@ -15,5 +15,9 @@ def load_scaled_image(path, size):
 
 def reset_game_objects():
 	player_img = load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "blue.png"), (TILE, TILE))
-	enemy_img = load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "ghost_20.png"), (TILE, TILE))
-	return Player(player_img), enemy_img
+	enemy_images = [
+		load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "ghost_20.png"), (TILE, TILE)),
+		load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "pink_enemy.png"), (TILE, TILE)),
+		load_scaled_image(os.path.join(BASE_DIR, "assets", "images", "red_enemy.png"), (TILE, TILE)),
+	]
+	return Player(player_img), enemy_images

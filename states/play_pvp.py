@@ -1,4 +1,5 @@
 import os
+import random
 import time
 
 import pygame
@@ -6,16 +7,22 @@ import pygame
 from config.settings import FPS, TILE
 from core.audio_manager import play_background_music, play_sound, stop_background_music
 from entities.player import Player
-from map.game_map import draw_map as draw_game_map
+from map.game_map import draw_map as draw_game_map, is_walkable
 from map.map_data import map_data, set_map_for_difficulty
 from states.main_menu import draw_button, get_font
 
 
 PVP_TIME_LIMIT_SEC = 60
-PVP_STEP_MS = 110
+PVP_TAGGER_STEP_MS = 102
+PVP_RUNNER_STEP_MS = 118
 PVP_ANIM_MS = 90
 PVP_TAG_SWITCH_COOLDOWN_MS = 800
 PVP_SWITCH_BANNER_MS = 1100
+PVP_POWERUP_DURATION_MS = 4200
+PVP_POWERUP_RESPAWN_RANGE_MS = (1400, 2800)
+PVP_POWERUP_LIFETIME_MS = 7000
+PVP_POWERUP_STEP_BONUS_MS = 22
+PVP_POWERUP_ON_MAP_CAP = 4
 
 KEY_TO_DIR_P1 = {
 	pygame.K_w: (-1, 0),
@@ -80,7 +87,33 @@ def _apply_cell_move(player, target_cell):
 	return True
 
 
-def _draw_hud(screen_surface, remaining_sec, current_tagger, cooldown_left_ms, hud_font):
+def _random_respawn_delay(respawn_range):
+	return random.randint(respawn_range[0], respawn_range[1])
+
+
+def _spawn_speed_powerup(excluded_cells):
+	candidates = []
+	for row_index, row in enumerate(map_data):
+		for col_index, cell in enumerate(row):
+			if not is_walkable(map_data, [row_index, col_index]):
+				continue
+			if (row_index, col_index) in excluded_cells:
+				continue
+			candidates.append([row_index, col_index])
+
+	if not candidates:
+		return None
+	return random.choice(candidates)
+
+
+def _draw_speed_powerups(screen_surface, powerup_cells):
+	for row_index, col_index in powerup_cells:
+		rect = pygame.Rect(col_index * TILE + 5, row_index * TILE + 5, TILE - 10, TILE - 10)
+		pygame.draw.rect(screen_surface, (89, 232, 159), rect, border_radius=6)
+		pygame.draw.rect(screen_surface, (212, 255, 232), rect, width=2, border_radius=6)
+
+
+def _draw_hud(screen_surface, remaining_sec, current_tagger, cooldown_left_ms, p1_boost_left_ms, p2_boost_left_ms, hud_font):
 	runner = 1 if current_tagger == 2 else 2
 	tagger_text = f"[D] Người đuổi: P{current_tagger}"
 	runner_text = f"[C] Người chạy: P{runner}"
@@ -90,6 +123,10 @@ def _draw_hud(screen_surface, remaining_sec, current_tagger, cooldown_left_ms, h
 		runner_text,
 		f"Thời gian: {remaining_sec}s",
 	]
+	if p1_boost_left_ms > 0:
+		items.append(f"Boost P1: {p1_boost_left_ms / 1000:.1f}s")
+	if p2_boost_left_ms > 0:
+		items.append(f"Boost P2: {p2_boost_left_ms / 1000:.1f}s")
 	if cooldown_left_ms > 0:
 		items.append(f"Đổi vai sau: {cooldown_left_ms / 1000:.1f}s")
 
@@ -187,6 +224,7 @@ def run(screen_surface, game_clock, _payload=None):
 
 	last_step_p1_ms = pygame.time.get_ticks()
 	last_step_p2_ms = pygame.time.get_ticks()
+	base_tick_ms = pygame.time.get_ticks()
 	start_time = time.time()
 
 	active_dirs_p1 = []
@@ -199,6 +237,12 @@ def run(screen_surface, game_clock, _payload=None):
 	switch_banner_text = "Bắt đầu: [D] P2 đuổi | [C] P1 chạy"
 	switch_banner_until_ms = pygame.time.get_ticks() + PVP_SWITCH_BANNER_MS
 	was_touching_last_tick = False
+	powerup_cells = []
+	powerup_cell_set = set()
+	powerup_spawn_ms = {}
+	next_powerup_spawn_ms = base_tick_ms + _random_respawn_delay(PVP_POWERUP_RESPAWN_RANGE_MS)
+	p1_boost_until_ms = 0
+	p2_boost_until_ms = 0
 
 	is_finished = False
 	finish_title = ""
@@ -259,8 +303,14 @@ def run(screen_surface, game_clock, _payload=None):
 					return "menu", None
 
 		if not is_finished:
-			due_p1 = now_ms - last_step_p1_ms >= PVP_STEP_MS
-			due_p2 = now_ms - last_step_p2_ms >= PVP_STEP_MS
+			p1_step_ms = PVP_TAGGER_STEP_MS if current_tagger == 1 else PVP_RUNNER_STEP_MS
+			p2_step_ms = PVP_TAGGER_STEP_MS if current_tagger == 2 else PVP_RUNNER_STEP_MS
+			if now_ms < p1_boost_until_ms:
+				p1_step_ms = max(70, p1_step_ms - PVP_POWERUP_STEP_BONUS_MS)
+			if now_ms < p2_boost_until_ms:
+				p2_step_ms = max(70, p2_step_ms - PVP_POWERUP_STEP_BONUS_MS)
+			due_p1 = now_ms - last_step_p1_ms >= p1_step_ms
+			due_p2 = now_ms - last_step_p2_ms >= p2_step_ms
 
 			old_p1 = tuple(player1.pos)
 			old_p2 = tuple(player2.pos)
@@ -284,6 +334,41 @@ def run(screen_surface, game_clock, _payload=None):
 
 			p1_cell = tuple(player1.pos)
 			p2_cell = tuple(player2.pos)
+
+			for powerup_cell in list(powerup_cells):
+				cell_key = tuple(powerup_cell)
+				if p1_cell == cell_key:
+					p1_boost_until_ms = max(p1_boost_until_ms, now_ms) + PVP_POWERUP_DURATION_MS
+					powerup_cells.remove(powerup_cell)
+					powerup_cell_set.discard(cell_key)
+					powerup_spawn_ms.pop(cell_key, None)
+					play_sound("eat", volume_scale=0.9, vary=True)
+					continue
+				if p2_cell == cell_key:
+					p2_boost_until_ms = max(p2_boost_until_ms, now_ms) + PVP_POWERUP_DURATION_MS
+					powerup_cells.remove(powerup_cell)
+					powerup_cell_set.discard(cell_key)
+					powerup_spawn_ms.pop(cell_key, None)
+					play_sound("eat", volume_scale=0.9, vary=True)
+
+			for powerup_cell in list(powerup_cells):
+				cell_key = tuple(powerup_cell)
+				if now_ms - powerup_spawn_ms.get(cell_key, now_ms) < PVP_POWERUP_LIFETIME_MS:
+					continue
+				powerup_cells.remove(powerup_cell)
+				powerup_cell_set.discard(cell_key)
+				powerup_spawn_ms.pop(cell_key, None)
+
+			if len(powerup_cells) < PVP_POWERUP_ON_MAP_CAP and now_ms >= next_powerup_spawn_ms:
+				excluded_cells = {tuple(player1.pos), tuple(player2.pos), *powerup_cell_set}
+				new_powerup = _spawn_speed_powerup(excluded_cells)
+				if new_powerup is not None:
+					cell_key = tuple(new_powerup)
+					if cell_key not in powerup_cell_set:
+						powerup_cells.append(new_powerup)
+						powerup_cell_set.add(cell_key)
+						powerup_spawn_ms[cell_key] = now_ms
+				next_powerup_spawn_ms = now_ms + _random_respawn_delay(PVP_POWERUP_RESPAWN_RANGE_MS)
 
 			touch_happened = p1_cell == p2_cell or (p1_cell == old_p2 and p2_cell == old_p1)
 			new_touch_event = touch_happened and (not was_touching_last_tick)
@@ -312,6 +397,7 @@ def run(screen_surface, game_clock, _payload=None):
 
 		screen_surface.fill((0, 0, 0))
 		draw_game_map(screen_surface, map_data, TILE, "pvp")
+		_draw_speed_powerups(screen_surface, powerup_cells)
 		player1.draw(screen_surface, TILE)
 		player2.draw(screen_surface, TILE)
 
@@ -320,7 +406,9 @@ def run(screen_surface, game_clock, _payload=None):
 		else:
 			remaining_sec = max(0, int(PVP_TIME_LIMIT_SEC - (time.time() - start_time)))
 		cooldown_left_ms = max(0, PVP_TAG_SWITCH_COOLDOWN_MS - (now_ms - last_switch_ms))
-		_draw_hud(screen_surface, remaining_sec, current_tagger, cooldown_left_ms, hud_font)
+		p1_boost_left_ms = max(0, p1_boost_until_ms - now_ms)
+		p2_boost_left_ms = max(0, p2_boost_until_ms - now_ms)
+		_draw_hud(screen_surface, remaining_sec, current_tagger, cooldown_left_ms, p1_boost_left_ms, p2_boost_left_ms, hud_font)
 
 		if (not is_finished) and now_ms < switch_banner_until_ms:
 			_draw_switch_banner(screen_surface, switch_banner_text, banner_font)
