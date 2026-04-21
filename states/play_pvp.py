@@ -10,7 +10,9 @@ from core.audio_manager import play_background_music, play_sound, stop_backgroun
 from entities.player import Player
 from map.game_map import draw_map as draw_game_map, is_walkable
 from map.map_data import map_data, set_map_for_difficulty
+from states import settings_state
 from states.main_menu import draw_button, get_font
+from states.play_pve.render import draw_pause_overlay, pause_ui_layout
 from utils.runtime_paths import resource_path
 
 
@@ -289,6 +291,9 @@ def run(screen_surface, game_clock, _payload=None):
 	next_powerup_spawn_ms = base_tick_ms + _random_respawn_delay(PVP_POWERUP_RESPAWN_RANGE_MS)
 	p1_boost_until_ms = 0
 	p2_boost_until_ms = 0
+	is_paused = False
+	pause_started_sec = None
+	paused_total_sec = 0.0
 
 	is_finished = False
 	finish_title = ""
@@ -305,10 +310,72 @@ def run(screen_surface, game_clock, _payload=None):
 				stop_background_music(fade_ms=220)
 				return "quit", None
 
+			if is_paused:
+				layout = pause_ui_layout(screen_surface)
+				resume_rect = layout["resume"]
+				settings_rect = layout["settings"]
+				menu_rect = layout["menu"]
+
+				if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+					if resume_rect.collidepoint(event.pos):
+						is_paused = False
+						if pause_started_sec is not None:
+							paused_total_sec += time.time() - pause_started_sec
+							pause_started_sec = None
+						continue
+					if settings_rect.collidepoint(event.pos):
+						next_state, _payload = settings_state.run(
+							screen_surface,
+							game_clock,
+							{"return_state": "pause"},
+						)
+						if next_state == "quit":
+							stop_background_music(fade_ms=220)
+							return "quit", None
+						continue
+					if menu_rect.collidepoint(event.pos):
+						stop_background_music(fade_ms=220)
+						return "menu", None
+
 			if event.type == pygame.KEYDOWN:
 				if event.key == pygame.K_ESCAPE:
-					stop_background_music(fade_ms=220)
-					return "menu", None
+					if is_finished:
+						stop_background_music(fade_ms=220)
+						return "menu", None
+					if is_paused:
+						is_paused = False
+						if pause_started_sec is not None:
+							paused_total_sec += time.time() - pause_started_sec
+							pause_started_sec = None
+					else:
+						is_paused = True
+						pause_started_sec = time.time()
+						active_dirs_p1.clear()
+						active_dirs_p2.clear()
+						queued_turn_p1 = None
+						queued_turn_p2 = None
+					continue
+				if is_paused:
+					if event.key == pygame.K_m:
+						stop_background_music(fade_ms=220)
+						return "menu", None
+					if event.key == pygame.K_s:
+						next_state, _payload = settings_state.run(
+							screen_surface,
+							game_clock,
+							{"return_state": "pause"},
+						)
+						if next_state == "quit":
+							stop_background_music(fade_ms=220)
+							return "quit", None
+						continue
+					if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+						is_paused = False
+						if pause_started_sec is not None:
+							paused_total_sec += time.time() - pause_started_sec
+							pause_started_sec = None
+						continue
+					continue
 				if not is_finished and event.key in KEY_TO_DIR_P1:
 					direction = KEY_TO_DIR_P1[event.key]
 					queued_turn_p1 = direction
@@ -322,7 +389,7 @@ def run(screen_surface, game_clock, _payload=None):
 						active_dirs_p2.remove(direction)
 					active_dirs_p2.append(direction)
 
-			if event.type == pygame.KEYUP:
+			if (not is_paused) and event.type == pygame.KEYUP:
 				if event.key in KEY_TO_DIR_P1:
 					direction = KEY_TO_DIR_P1[event.key]
 					if direction in active_dirs_p1:
@@ -347,6 +414,26 @@ def run(screen_surface, game_clock, _payload=None):
 				if menu_rect.collidepoint(event.pos):
 					stop_background_music(fade_ms=220)
 					return "menu", None
+
+		if is_paused:
+			mouse_pos = pygame.mouse.get_pos()
+			screen_surface.fill((0, 0, 0))
+			draw_game_map(screen_surface, map_data, TILE, "pvp")
+			_draw_speed_powerups(screen_surface, powerup_cells)
+			player1.draw(screen_surface, TILE)
+			player2.draw(screen_surface, TILE)
+
+			elapsed_sec = 0.0
+			if pause_started_sec is not None:
+				elapsed_sec = max(0.0, pause_started_sec - start_time - paused_total_sec)
+			remaining_sec = max(0, int(PVP_TIME_LIMIT_SEC - elapsed_sec))
+			cooldown_left_ms = max(0, PVP_TAG_SWITCH_COOLDOWN_MS - (now_ms - last_switch_ms))
+			p1_boost_left_ms = max(0, p1_boost_until_ms - now_ms)
+			p2_boost_left_ms = max(0, p2_boost_until_ms - now_ms)
+			_draw_hud(screen_surface, remaining_sec, current_tagger, cooldown_left_ms, p1_boost_left_ms, p2_boost_left_ms, hud_font)
+			draw_pause_overlay(screen_surface, mouse_pos)
+			pygame.display.flip()
+			continue
 
 		if not is_finished:
 			p1_step_ms = PVP_TAGGER_STEP_MS if current_tagger == 1 else PVP_RUNNER_STEP_MS
@@ -429,7 +516,7 @@ def run(screen_surface, game_clock, _payload=None):
 
 			was_touching_last_tick = touch_happened
 
-			elapsed_sec = time.time() - start_time
+			elapsed_sec = time.time() - start_time - paused_total_sec
 			if (not is_finished) and elapsed_sec >= PVP_TIME_LIMIT_SEC:
 				is_finished = True
 				winner = 1 if current_tagger == 2 else 2
@@ -450,7 +537,7 @@ def run(screen_surface, game_clock, _payload=None):
 		if is_finished and frozen_remaining_sec is not None:
 			remaining_sec = frozen_remaining_sec
 		else:
-			remaining_sec = max(0, int(PVP_TIME_LIMIT_SEC - (time.time() - start_time)))
+			remaining_sec = max(0, int(PVP_TIME_LIMIT_SEC - (time.time() - start_time - paused_total_sec)))
 		cooldown_left_ms = max(0, PVP_TAG_SWITCH_COOLDOWN_MS - (now_ms - last_switch_ms))
 		p1_boost_left_ms = max(0, p1_boost_until_ms - now_ms)
 		p2_boost_left_ms = max(0, p2_boost_until_ms - now_ms)

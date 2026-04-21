@@ -110,7 +110,7 @@ def run(screen, clock, _payload=None):
 	pve_rules = [
 		"Bạn điều khiển 1 nhân vật bằng WASD để né đội AI truy đuổi",
 		"Ăn chấm vàng để tăng Mục tiêu",
-		"Ăn đủ Mục tiêu sẽ thắng ngay (Dễ 3, Trung bình 3, Khó 4)",
+		"Ăn đủ Mục tiêu sẽ thắng ngay (Dễ 6, Trung bình 5, Khó 4)",
 		"Ăn ô xanh để tăng tốc 4.2 giây (có thể cộng dồn)",
 		"Nếu AI chạm vào người chơi thì thua",
 		"Nếu sống đến hết thời gian thì thắng",

@@ -15,13 +15,13 @@ DIFFICULTY_CONFIG = {
 	},
 	"medium": {
 		"time_limit": TIME_LIMIT + 10,
-		"enemy_step_ms": ENEMY_STEP_MS + 5,
+		"enemy_step_ms": ENEMY_STEP_MS ,
 		"algorithms": ("vision", "vision", "bfs"),
 	},
 	"hard": {
-		"time_limit": TIME_LIMIT ,
+		"time_limit": TIME_LIMIT + 10,
 		"enemy_step_ms": ENEMY_STEP_MS - 5,
-		"algorithms": ("bfs", "bfs", "astar"),
+		"algorithms": ("vision", "bfs", "astar"),
 	},
 }
 
@@ -32,7 +32,7 @@ DIFFICULTY_LABELS = {
 }
 
 OBJECTIVE_TARGETS = {
-	"easy": 5,
+	"easy": 6,
 	"medium": 5,
 	"hard": 5,
 }
@@ -40,8 +40,8 @@ OBJECTIVE_TARGETS = {
 POWERUP_DURATION_MS = 4200
 POWERUP_RESPAWN_RANGE_MS = (2200, 5200)
 POWERUP_ON_MAP_CAP = 2
-OBJECTIVE_RELOCATE_MS = 6600
-POWERUP_LIFETIME_MS = 6500
+OBJECTIVE_RELOCATE_MS = 5200
+POWERUP_LIFETIME_MS = 5500
 POWERUP_PLAYER_STEP_BONUS = 34
 DANGER_DISTANCE_THRESHOLD = 8
 
