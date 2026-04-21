@@ -15,6 +15,9 @@ jobs:
   build:
     runs-on: windows-latest
 
+    env:
+      APP_NAME: ChaseGame
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -31,16 +34,46 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name ChaseGame --paths . --add-data "assets;assets" main.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name ${{ env.APP_NAME }} --paths . --add-data "assets;assets" main.py
+
+      - name: Resolve release file names
+        id: names
+        shell: pwsh
+        run: |
+          $version = "dev-${{ github.run_number }}"
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $version = "${{ github.ref_name }}"
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "zip_name=${{ env.APP_NAME }}-$version-windows.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "exe_name=${{ env.APP_NAME }}.exe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/${{ steps.names.outputs.exe_name }} -DestinationPath dist/${{ steps.names.outputs.zip_name }} -Force
+
+      - name: Generate SHA256 checksum
+        shell: pwsh
+        run: |
+          $hash = Get-FileHash -Algorithm SHA256 "dist/${{ steps.names.outputs.zip_name }}"
+          "$($hash.Hash.ToLower())  ${{ steps.names.outputs.zip_name }}" | Out-File -FilePath "dist/SHA256SUMS.txt" -Encoding ascii
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChaseGame-windows
-          path: dist/ChaseGame.exe
+          name: ChaseGame-windows-${{ steps.names.outputs.version }}
+          path: |
+            dist/${{ steps.names.outputs.exe_name }}
+            dist/${{ steps.names.outputs.zip_name }}
+            dist/SHA256SUMS.txt
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ChaseGame.exe
+          generate_release_notes: true
+          files: |
+            dist/${{ steps.names.outputs.exe_name }}
+            dist/${{ steps.names.outputs.zip_name }}
+            dist/SHA256SUMS.txt
