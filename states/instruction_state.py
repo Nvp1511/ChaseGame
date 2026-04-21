@@ -122,7 +122,7 @@ def run(screen, clock, _payload=None):
 		"Ban đầu Player 2 là người đuổi",
 		"Người đuổi chạm đối thủ sẽ đổi vai cho người còn lại",
 		"Sau mỗi lần đổi vai có hồi 0.8 giây để tránh chạm liên hoàn",
-		"HUD luôn hiển thị rõ [D]/[C] theo vai hiện tại",
+		"Ăn ô xanh để tăng tốc độ trong 4.2 giây (có thể cộng dồn)",
 		"Trận đấu kéo dài 60 giây",
 		"Khi hết giờ, ai còn là người đuổi sẽ thua",
 	]
