@@ -4,7 +4,7 @@ Tài liệu này dành cho người dùng cuối: tải game ở đâu, mở gam
 
 ## Tải game ở đâu?
 
-Hiện tại dự án đang build tự động bằng GitHub Actions, đúng như bạn đang làm.
+Hiện tại dự án đang build tự động bằng GitHub Actions
 
 Bạn có 2 cách tải bản Windows:
 
