@@ -9,6 +9,7 @@ from entities.player import Player
 from map.game_map import draw_map as draw_game_map
 from map.map_data import map_data, set_map_for_difficulty
 from states.main_menu import draw_button, get_font
+from utils.runtime_paths import resource_path
 
 
 PVP_TIME_LIMIT_SEC = 60
@@ -38,8 +39,7 @@ def _load_scaled_image(path, size):
 
 
 def _build_player_images():
-	base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-	player1_img = _load_scaled_image(os.path.join(base_dir, "assets", "images", "blue.png"), (TILE, TILE)).convert_alpha()
+	player1_img = _load_scaled_image(resource_path("assets", "images", "blue.png"), (TILE, TILE)).convert_alpha()
 	player2_img = player1_img.copy()
 	# Tint second player so both are easy to distinguish.
 	player2_img.fill((255, 170, 130, 255), special_flags=pygame.BLEND_RGBA_MULT)

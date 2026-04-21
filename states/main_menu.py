@@ -1,6 +1,8 @@
 import pygame
 import os
 
+from utils.runtime_paths import resource_path
+
 
 SCREEN_LEFT = (250, 237, 214)
 SCREEN_RIGHT = (240, 214, 177)
@@ -203,7 +205,7 @@ def run(screen, clock, _payload=None):
 	guide_x = 8
 	settings_x = width - 8
 
-	assets_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "assets", "images"))
+	assets_dir = resource_path("assets", "images")
 	help_icon = _load_first_available_icon(assets_dir, ["icon_help.png", "question.png", "help.png"])
 	settings_icon = _load_first_available_icon(assets_dir, ["icon_settings.png", "icon_setting.png", "settings.png"])
 
